@@ -57,7 +57,7 @@ def _get_validation_exclusions(obj, pk=None, slug_field=None, lookup_field=None)
     return [field.name for field in obj._meta.fields if field.name not in include]
 
 
-class CreateModelMixin(object):
+class CreateModelMixin:
     """
     Create a model instance.
     """
@@ -83,7 +83,7 @@ class CreateModelMixin(object):
             return {}
 
 
-class ListModelMixin(object):
+class ListModelMixin:
     """
     List a queryset.
     """
@@ -113,7 +113,7 @@ class ListModelMixin(object):
         return response.Ok(serializer.data)
 
 
-class RetrieveModelMixin(object):
+class RetrieveModelMixin:
     """
     Retrieve a model instance.
     """
@@ -129,7 +129,7 @@ class RetrieveModelMixin(object):
         return response.Ok(serializer.data)
 
 
-class UpdateModelMixin(object):
+class UpdateModelMixin:
     """
     Update a model instance.
     """
@@ -196,7 +196,7 @@ class UpdateModelMixin(object):
             obj.full_clean(exclude)
 
 
-class DestroyModelMixin(object):
+class DestroyModelMixin:
     """
     Destroy a model instance.
     """
@@ -213,3 +213,37 @@ class DestroyModelMixin(object):
         obj.delete()
         self.post_delete(obj)
         return response.NoContent()
+
+
+class OptionalFieldsModelMixin:
+    """
+    This mixin is designed to be included in viewsets needing to include
+    some optional attributes on the result querysets
+
+    optional_fields are not included by default in the result queryset
+
+    optional_fields internal structure will be similar to:
+    {
+        ...
+        "optional_field_name": {
+            "enabled": Boolean,
+            "callback": it must receive at least a queryset and return another one,
+            "args": *args for method_to_call,
+            "kwargs": **kwargs for method_to_call
+        },
+        ...
+    }
+    """
+    optional_fields = {}
+
+    def enable_optional_field(self, field_name):
+        field_data = self.optional_fields.get(field_name, None)
+        if field_data is not None:
+            field_data["enabled"] = True
+
+    def attach_optional_fields_to_queryset(self, queryset):
+        for field_name, field_data in self.optional_fields.items():
+            if field_data["enabled"]:
+                queryset = field_data["callback"](queryset, *field_data["args"], **field_data["kwargs"])
+
+        return queryset

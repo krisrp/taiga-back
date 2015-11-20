@@ -16,7 +16,6 @@
 
 from taiga.base.api import serializers
 
-
 class FanResourceSerializerMixin(serializers.ModelSerializer):
     is_fan = serializers.SerializerMethodField("get_is_fan")
     total_fans = serializers.SerializerMethodField("get_total_fans")
@@ -28,3 +27,15 @@ class FanResourceSerializerMixin(serializers.ModelSerializer):
     def get_total_fans(self, obj):
         # The "total_fans" attribute is attached in the get_queryset of the viewset.
         return getattr(obj, "total_fans", 0) or 0
+
+    def get_total_fans_last_week(self, obj):
+        # The "total_fans_last_week" attribute is attached in the get_queryset of the viewset.
+        return getattr(obj, "total_fans_last_week", 0) or 0
+
+    def get_total_fans_last_month(self, obj):
+        # The "total_fanstotal_fans_last_month attribute is attached in the get_queryset of the viewset.
+        return getattr(obj, "total_fans_last_month", 0) or 0
+
+    def get_total_fans_last_year(self, obj):
+        # The "total_fans_last_year" attribute is attached in the get_queryset of the viewset.
+        return getattr(obj, "total_fans_last_year", 0) or 0

@@ -26,6 +26,7 @@ from taiga.base import exceptions as exc
 from taiga.base.decorators import list_route
 from taiga.base.decorators import detail_route
 from taiga.base.api import ModelCrudViewSet, ModelListViewSet
+from taiga.base.api.mixins import OptionalFieldsModelMixin
 from taiga.base.api.permissions import AllowAnyPermission
 from taiga.base.api.utils import get_object_or_404
 from taiga.base.utils.slug import slugify_uniquely
@@ -45,6 +46,7 @@ from taiga.projects.userstories.models import UserStory, RolePoints
 from taiga.projects.tasks.models import Task
 from taiga.projects.issues.models import Issue
 from taiga.projects.likes.mixins.viewsets import LikedResourceMixin, FansViewSetMixin
+from taiga.projects.likes.utils import attach_total_fans_to_queryset
 from taiga.permissions import service as permissions_service
 
 from . import serializers
@@ -56,7 +58,7 @@ from . import services
 ######################################################
 ## Project
 ######################################################
-class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet):
+class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet, OptionalFieldsModelMixin):
     queryset = models.Project.objects.all()
     serializer_class = serializers.ProjectDetailSerializer
     admin_serializer_class = serializers.ProjectDetailAdminSerializer
@@ -70,17 +72,73 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet)
                      'is_kanban_activated')
 
     order_by_fields = ("memberships__user_order",
-                       "total_fans")
+                       "total_fans",
+                       "total_fans_last_week",
+                       "total_fans_last_month",
+                       "total_fans_last_year")
+
+    optional_fields = {
+        "total_fans_last_week": {
+            "enabled": False,
+            "callback": attach_total_fans_to_queryset,
+            "args": [],
+            "kwargs":{"as_field": "total_fans_last_week", "last_days": 7},
+        },
+        "total_fans_last_month": {
+            "enabled": False,
+            "callback": attach_total_fans_to_queryset,
+            "args": [],
+            "kwargs":{"as_field": "total_fans_last_month", "last_days": 0},
+        },
+        "total_fans_last_year": {
+            "enabled": False,
+            "callback": attach_total_fans_to_queryset,
+            "args": [],
+            "kwargs":{"as_field": "total_fans_last_year", "last_days": 5},
+        }
+    }
+
+    def get_order_by_field_name(self):
+        order_by_query_param = filters.CanViewProjectObjFilterBackend.order_by_query_param
+        order_by = self.request.QUERY_PARAMS.get(order_by_query_param, None)
+        if order_by is not None and order_by.startswith("-"):
+            return order_by[1:]
+
+        return order_by
 
     def get_queryset(self):
         qs = super().get_queryset()
+
+        order_by_field_name = self.get_order_by_field_name()
+        self.enable_optional_field(order_by_field_name)
         qs = self.attach_likes_attrs_to_queryset(qs)
+        qs = self.attach_optional_fields_to_queryset(qs)
+
         qs = attach_project_total_watchers_attrs_to_queryset(qs)
         if self.request.user.is_authenticated():
             qs = attach_project_is_watcher_to_queryset(qs, self.request.user)
             qs = attach_notify_level_to_project_queryset(qs, self.request.user)
 
         return qs
+
+    def get_serializer_class(self):
+        serializer_class = self.serializer_class
+
+        if self.action == "list":
+            serializer_class = self.list_serializer_class
+            order_by_field_name = self.get_order_by_field_name()
+            serializer_class.enable_optional_field(order_by_field_name)
+        elif self.action != "create":
+            if self.action == "by_slug":
+                slug = self.request.QUERY_PARAMS.get("slug", None)
+                project = get_object_or_404(models.Project, slug=slug)
+            else:
+                project = self.get_object()
+
+            if permissions_service.is_project_owner(self.request.user, project):
+                serializer_class = self.admin_serializer_class
+
+        return serializer_class
 
     @detail_route(methods=["POST"])
     def watch(self, request, pk=None):
@@ -110,23 +168,6 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet)
         data = serializer.data
         services.update_projects_order_in_bulk(data, "user_order", request.user)
         return response.NoContent(data=None)
-
-    def get_serializer_class(self):
-        if self.action == "list":
-            return self.list_serializer_class
-        elif self.action == "create":
-            return self.serializer_class
-
-        if self.action == "by_slug":
-            slug = self.request.QUERY_PARAMS.get("slug", None)
-            project = get_object_or_404(models.Project, slug=slug)
-        else:
-            project = self.get_object()
-
-        if permissions_service.is_project_owner(self.request.user, project):
-            return self.admin_serializer_class
-
-        return self.serializer_class
 
     @list_route(methods=["GET"])
     def by_slug(self, request):

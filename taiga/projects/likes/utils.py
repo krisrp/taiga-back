@@ -18,7 +18,7 @@
 from django.apps import apps
 
 
-def attach_total_fans_to_queryset(queryset, as_field="total_fans"):
+def attach_total_fans_to_queryset(queryset, as_field="total_fans", last_days=None):
     """Attach likes count to each object of the queryset.
 
     Because of laziness of like objects creation, this makes much simpler and more efficient to
@@ -29,19 +29,26 @@ def attach_total_fans_to_queryset(queryset, as_field="total_fans"):
 
     :param queryset: A Django queryset object.
     :param as_field: Attach the likes-count as an attribute with this name.
+    :param last_days: ignored if None. If it's a valid integer only the fans created
+        in the last days are counted
 
     :return: Queryset object with the additional `as_field` field.
     """
     model = queryset.model
     type = apps.get_model("contenttypes", "ContentType").objects.get_for_model(model)
-    sql = """SELECT coalesce(SUM(total_fans), 0) FROM (
-                SELECT coalesce(likes_likes.count, 0) total_fans
-                  FROM likes_likes
-                 WHERE likes_likes.content_type_id = {type_id}
-                   AND likes_likes.object_id = {tbl}.id
-          ) as e"""
-
+    sql = """SELECT COUNT(*)
+                  FROM likes_like
+                 WHERE likes_like.content_type_id = {type_id}
+                   AND likes_like.object_id = {tbl}.id
+          """
     sql = sql.format(type_id=type.id, tbl=model._meta.db_table)
+
+    if last_days:
+        sql += """
+                   AND likes_like.created_date > current_date - interval '{last_days}' day
+            """
+        sql = sql.format(last_days=last_days)
+
     qs = queryset.extra(select={as_field: sql})
     return qs
 

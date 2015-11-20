@@ -1189,3 +1189,57 @@ class HyperlinkedModelSerializer(ModelSerializer):
             "model_name": model_meta.object_name.lower()
         }
         return self._default_view_name % format_kwargs
+
+
+class OptionalFieldsModelSerializer(ModelSerializer):
+    """
+    This serializers includes some optional fields on the results
+
+    optional_fields are not included by default in the result
+
+    All the optional fields are disabled after the serializer initialization
+    (the call to get_fields resets them after parsing) but it can be manually done if needed
+    calling the method reset_optional_fields
+
+    optional_fields internal structure will be similar to:
+    {
+        ...
+        "optional_field_name": {
+            "enabled": Boolean,
+            "callback": it must receive at least a queryset and return another one,
+            "args": *args for method_to_call,
+            "kwargs": **kwargs for method_to_call
+        },
+        ...
+    }
+
+    When extending this class you must add an optional_fields attribute to the Meta class
+    existing in the serializer
+
+    class ExampleSerializer(...):
+        ...
+        class Meta:
+            ...
+            optional_fields = {...}
+            ...
+
+    """
+
+    @classmethod
+    def enable_optional_field(cls, field_name):
+        optional_fields = cls.Meta.optional_fields if hasattr(cls.Meta, "optional_fields") else {}
+
+        field_data = optional_fields.get(field_name, None)
+        if field_data is not None:
+            field_data["enabled"] = True
+
+    def get_fields(self):
+        ret = super(OptionalFieldsModelSerializer, self).get_fields()
+        optional_fields = self.Meta.optional_fields if hasattr(self.Meta, "optional_fields") else {}
+
+        for field_name, field_data in optional_fields.items():
+            if field_data["enabled"]:
+                ret[field_name] = field_data["callback"]
+                field_data["enabled"] = False
+
+        return ret

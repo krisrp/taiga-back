@@ -308,7 +308,7 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
 ## Projects
 ######################################################
 
-class ProjectSerializer(FanResourceSerializerMixin, WatchedResourceModelSerializer, serializers.ModelSerializer):
+class ProjectSerializer(FanResourceSerializerMixin, WatchedResourceModelSerializer, serializers.OptionalFieldsModelSerializer):
     tags = TagsField(default=[], required=False)
     anon_permissions = PgArrayField(required=False)
     public_permissions = PgArrayField(required=False)
@@ -323,6 +323,27 @@ class ProjectSerializer(FanResourceSerializerMixin, WatchedResourceModelSerializ
         read_only_fields = ("created_date", "modified_date", "owner", "slug")
         exclude = ("last_us_ref", "last_task_ref", "last_issue_ref",
                    "issues_csv_uuid", "tasks_csv_uuid", "userstories_csv_uuid")
+
+        optional_fields = {
+            "total_fans_last_week": {
+                "enabled": False,
+                "callback": serializers.SerializerMethodField("get_total_fans_last_week"),
+                "args": None,
+                "kwargs": None
+            },
+            "total_fans_last_month": {
+                "enabled": False,
+                "callback": serializers.SerializerMethodField("get_total_fans_last_month"),
+                "args": None,
+                "kwargs": None
+            },
+            "total_fans_last_year": {
+                "enabled": False,
+                "callback": serializers.SerializerMethodField("get_total_fans_last_year"),
+                "args": None,
+                "kwargs": None
+            }
+        }
 
     def get_my_permissions(self, obj):
         if "request" in self.context:
