@@ -29,6 +29,8 @@ from .choices import HISTORY_TYPE_CHOICES
 
 from taiga.base.utils.diff import make_diff as make_diff_from_dicts
 
+from datetime import timedelta
+
 # This keys has been removed from freeze_impl so we can have objects where the
 # previous diff has value for the attribute and we want to prevent their propagation
 IGNORE_DIFF_FIELDS = [ "watchers", "description_diff", "content_diff", "blocked_note_diff"]
@@ -239,3 +241,59 @@ class HistoryEntry(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class Activity(models.Model):
+    project = models.OneToOneField("projects.Project", null=False, blank=False,
+                                related_name="activity", verbose_name=_("project"))
+
+    count = models.PositiveIntegerField(null=False, blank=False, default=0, verbose_name=_("count"))
+    count_week = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                             verbose_name=_("count last week"))
+
+    count_month = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                              verbose_name=_("count last month"))
+
+    count_year = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                             verbose_name=_("count last year"))
+
+    updated_datetime = models.DateTimeField(null=False, blank=False, auto_now_add=True,
+                                            verbose_name=_("updated date time"))
+
+    class Meta:
+        verbose_name = _("Activity")
+        verbose_name_plural = _("Activity")
+
+    def __str__(self):
+        return self.project.name
+
+    def refresh(self, save=True):
+        from taiga.timeline.service import build_project_namespace
+
+        tl_model = apps.get_model("timeline", "Timeline")
+        namespace = build_project_namespace(self.project)
+
+        qs = tl_model.objects.filter(namespace=namespace)
+        count = qs.count()
+
+        now = timezone.now()
+        qs_week = tl_model.objects.filter(namespace=namespace).filter(
+            created__gte=now-timedelta(days=7))
+        count_week = qs_week.count()
+
+        qs_month = tl_model.objects.filter(namespace=namespace).filter(
+            created__gte=now-timedelta(days=30))
+        count_month = qs_month.count()
+
+        qs_year = tl_model.objects.filter(namespace=namespace).filter(
+            created__gte=now-timedelta(days=365))
+        count_year = qs_year.count()
+
+        self.count = count
+        self.count_week = count_week
+        self.count_month = count_month
+        self.count_year = count_year
+        self.updated_datetime = now
+
+        if save:
+            self.save()

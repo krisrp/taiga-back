@@ -44,6 +44,7 @@ from .custom_attributes.serializers import UserStoryCustomAttributeSerializer
 from .custom_attributes.serializers import TaskCustomAttributeSerializer
 from .custom_attributes.serializers import IssueCustomAttributeSerializer
 from .likes.mixins.serializers import FanResourceSerializerMixin
+from taiga.timeline.mixins.serializers import ActivityResourceSerializerMixin
 
 ######################################################
 ## Custom values for selectors
@@ -308,7 +309,7 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
 ## Projects
 ######################################################
 
-class ProjectSerializer(FanResourceSerializerMixin, WatchedResourceModelSerializer, serializers.OptionalFieldsModelSerializer):
+class ProjectSerializer(FanResourceSerializerMixin, WatchedResourceModelSerializer, ActivityResourceSerializerMixin, serializers.OptionalFieldsModelSerializer):
     tags = TagsField(default=[], required=False)
     anon_permissions = PgArrayField(required=False)
     public_permissions = PgArrayField(required=False)
@@ -340,6 +341,24 @@ class ProjectSerializer(FanResourceSerializerMixin, WatchedResourceModelSerializ
             "total_fans_last_year": {
                 "enabled": False,
                 "callback": serializers.SerializerMethodField("get_total_fans_last_year"),
+                "args": None,
+                "kwargs": None
+            },
+            "total_activity_last_week": {
+                "enabled": False,
+                "callback": serializers.SerializerMethodField("get_total_activity_last_week"),
+                "args": None,
+                "kwargs": None
+            },
+            "total_activity_last_month": {
+                "enabled": False,
+                "callback": serializers.SerializerMethodField("get_total_activity_last_month"),
+                "args": None,
+                "kwargs": None
+            },
+            "total_activity_last_year": {
+                "enabled": False,
+                "callback": serializers.SerializerMethodField("get_total_activity_last_year"),
                 "args": None,
                 "kwargs": None
             }

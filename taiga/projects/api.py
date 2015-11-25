@@ -39,6 +39,11 @@ from taiga.projects.notifications.utils import (
     attach_project_is_watcher_to_queryset,
     attach_notify_level_to_project_queryset)
 
+from taiga.timeline.utils import (attach_project_activity_to_queryset,
+    attach_project_activity_last_week_to_queryset,
+    attach_project_activity_last_month_to_queryset,
+    attach_project_activity_last_year_to_queryset)
+
 from taiga.projects.mixins.ordering import BulkUpdateOrderMixin
 from taiga.projects.mixins.on_destroy import MoveOnDestroyMixin
 
@@ -75,7 +80,11 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet,
                        "total_fans",
                        "total_fans_last_week",
                        "total_fans_last_month",
-                       "total_fans_last_year")
+                       "total_fans_last_year",
+                       "total_activity",
+                       "total_activity_last_week",
+                       "total_activity_last_month",
+                       "total_activity_last_year")
 
     optional_fields = {
         "total_fans_last_week": {
@@ -88,14 +97,32 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet,
             "enabled": False,
             "callback": attach_total_fans_to_queryset,
             "args": [],
-            "kwargs":{"as_field": "total_fans_last_month", "last_days": 0},
+            "kwargs":{"as_field": "total_fans_last_month", "last_days": 30},
         },
         "total_fans_last_year": {
             "enabled": False,
             "callback": attach_total_fans_to_queryset,
             "args": [],
-            "kwargs":{"as_field": "total_fans_last_year", "last_days": 5},
-        }
+            "kwargs":{"as_field": "total_fans_last_year", "last_days": 365},
+        },
+        "total_activity_last_week": {
+            "enabled": False,
+            "callback": attach_project_activity_last_week_to_queryset,
+            "args": [],
+            "kwargs":{"as_field": "total_activity_last_week"},
+        },
+        "total_activity_last_month": {
+            "enabled": False,
+            "callback": attach_project_activity_last_month_to_queryset,
+            "args": [],
+            "kwargs":{"as_field": "total_activity_last_month"},
+        },
+        "total_activity_last_year": {
+            "enabled": False,
+            "callback": attach_project_activity_last_year_to_queryset,
+            "args": [],
+            "kwargs":{"as_field": "total_activity_last_year"},
+        },
     }
 
     def get_order_by_field_name(self):
@@ -109,12 +136,14 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet,
     def get_queryset(self):
         qs = super().get_queryset()
 
+        qs = self.attach_likes_attrs_to_queryset(qs)
+
         order_by_field_name = self.get_order_by_field_name()
         self.enable_optional_field(order_by_field_name)
-        qs = self.attach_likes_attrs_to_queryset(qs)
         qs = self.attach_optional_fields_to_queryset(qs)
 
         qs = attach_project_total_watchers_attrs_to_queryset(qs)
+        qs = attach_project_activity_to_queryset(qs)
         if self.request.user.is_authenticated():
             qs = attach_project_is_watcher_to_queryset(qs, self.request.user)
             qs = attach_notify_level_to_project_queryset(qs, self.request.user)
