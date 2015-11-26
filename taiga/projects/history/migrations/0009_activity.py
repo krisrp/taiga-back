@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
+
 from django.db import connection, migrations, models
 
 def create_activity(apps, schema_editor):
@@ -62,24 +63,23 @@ class Migration(migrations.Migration):
     dependencies = [
         ('projects', '0029_project_is_looking_for_people'),
         ('history', '0008_auto_20150508_1028'),
-        ('timeline', '0004_auto_20150603_1312'),
     ]
 
     operations = [
         migrations.CreateModel(
             name='Activity',
             fields=[
-                ('id', models.AutoField(serialize=False, verbose_name='ID', auto_created=True, primary_key=True)),
-                ('count', models.PositiveIntegerField(verbose_name='count', default=0)),
-                ('count_week', models.PositiveIntegerField(verbose_name='count last week', default=0)),
-                ('count_month', models.PositiveIntegerField(verbose_name='count last month', default=0)),
-                ('count_year', models.PositiveIntegerField(verbose_name='count last year', default=0)),
-                ('updated_datetime', models.DateTimeField(verbose_name='updated date time', auto_now_add=True)),
-                ('project', models.ForeignKey(related_name='activity', to='projects.Project', verbose_name='project')),
+                ('id', models.AutoField(serialize=False, auto_created=True, verbose_name='ID', primary_key=True)),
+                ('count', models.PositiveIntegerField(default=0, verbose_name='count')),
+                ('count_week', models.PositiveIntegerField(default=0, verbose_name='count last week')),
+                ('count_month', models.PositiveIntegerField(default=0, verbose_name='count last month')),
+                ('count_year', models.PositiveIntegerField(default=0, verbose_name='count last year')),
+                ('updated_datetime', models.DateTimeField(auto_now_add=True, verbose_name='updated date time')),
+                ('project', models.OneToOneField(verbose_name='project', related_name='activity', to='projects.Project')),
             ],
             options={
-                'verbose_name_plural': 'Activity',
                 'verbose_name': 'Activity',
+                'verbose_name_plural': 'Activity',
             },
         ),
         migrations.RunPython(create_activity),

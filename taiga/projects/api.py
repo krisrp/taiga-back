@@ -19,6 +19,7 @@ import uuid
 from django.db.models import signals
 from django.core.exceptions import ValidationError
 from django.utils.translation import ugettext as _
+from django.utils import timezone
 
 from taiga.base import filters
 from taiga.base import response
@@ -26,7 +27,6 @@ from taiga.base import exceptions as exc
 from taiga.base.decorators import list_route
 from taiga.base.decorators import detail_route
 from taiga.base.api import ModelCrudViewSet, ModelListViewSet
-from taiga.base.api.mixins import OptionalFieldsModelMixin
 from taiga.base.api.permissions import AllowAnyPermission
 from taiga.base.api.utils import get_object_or_404
 from taiga.base.utils.slug import slugify_uniquely
@@ -39,11 +39,6 @@ from taiga.projects.notifications.utils import (
     attach_project_is_watcher_to_queryset,
     attach_notify_level_to_project_queryset)
 
-from taiga.timeline.utils import (attach_project_activity_to_queryset,
-    attach_project_activity_last_week_to_queryset,
-    attach_project_activity_last_month_to_queryset,
-    attach_project_activity_last_year_to_queryset)
-
 from taiga.projects.mixins.ordering import BulkUpdateOrderMixin
 from taiga.projects.mixins.on_destroy import MoveOnDestroyMixin
 
@@ -51,7 +46,6 @@ from taiga.projects.userstories.models import UserStory, RolePoints
 from taiga.projects.tasks.models import Task
 from taiga.projects.issues.models import Issue
 from taiga.projects.likes.mixins.viewsets import LikedResourceMixin, FansViewSetMixin
-from taiga.projects.likes.utils import attach_total_fans_to_queryset
 from taiga.permissions import service as permissions_service
 
 from . import serializers
@@ -59,11 +53,13 @@ from . import models
 from . import permissions
 from . import services
 
+from datetime import timedelta
+
 
 ######################################################
 ## Project
 ######################################################
-class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet, OptionalFieldsModelMixin):
+class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet):
     queryset = models.Project.objects.all()
     serializer_class = serializers.ProjectDetailSerializer
     admin_serializer_class = serializers.ProjectDetailAdminSerializer
@@ -80,49 +76,13 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet,
                        "total_fans",
                        "total_fans_last_week",
                        "total_fans_last_month",
-                       "total_fans_last_year",
-                       "total_activity",
-                       "total_activity_last_week",
-                       "total_activity_last_month",
-                       "total_activity_last_year")
+                       "total_fans_last_year")
 
-    optional_fields = {
-        "total_fans_last_week": {
-            "enabled": False,
-            "callback": attach_total_fans_to_queryset,
-            "args": [],
-            "kwargs":{"as_field": "total_fans_last_week", "last_days": 7},
-        },
-        "total_fans_last_month": {
-            "enabled": False,
-            "callback": attach_total_fans_to_queryset,
-            "args": [],
-            "kwargs":{"as_field": "total_fans_last_month", "last_days": 30},
-        },
-        "total_fans_last_year": {
-            "enabled": False,
-            "callback": attach_total_fans_to_queryset,
-            "args": [],
-            "kwargs":{"as_field": "total_fans_last_year", "last_days": 365},
-        },
-        "total_activity_last_week": {
-            "enabled": False,
-            "callback": attach_project_activity_last_week_to_queryset,
-            "args": [],
-            "kwargs":{"as_field": "total_activity_last_week"},
-        },
-        "total_activity_last_month": {
-            "enabled": False,
-            "callback": attach_project_activity_last_month_to_queryset,
-            "args": [],
-            "kwargs":{"as_field": "total_activity_last_month"},
-        },
-        "total_activity_last_year": {
-            "enabled": False,
-            "callback": attach_project_activity_last_year_to_queryset,
-            "args": [],
-            "kwargs":{"as_field": "total_activity_last_year"},
-        },
+    order_by_fields_aliases = {
+           "total_activity": "activity__count_week",
+           "total_activity_last_week": "activity__count_week",
+           "total_activity_last_month": "activity__count_month",
+           "total_activity_last_year": "activity__count_year"
     }
 
     def get_order_by_field_name(self):
@@ -131,19 +91,23 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet,
         if order_by is not None and order_by.startswith("-"):
             return order_by[1:]
 
-        return order_by
-
     def get_queryset(self):
         qs = super().get_queryset()
+        qs = qs.prefetch_related("likes")
+        qs = qs.select_related("activity")
+
+        # If filtering an activity period we must exclude the activities not updated recently enough
+        now = timezone.now()
+        order_by_field_name = self.get_order_by_field_name()
+        if order_by_field_name == "total_activity_last_week":
+            qs = qs.filter(activity__updated_datetime__gte=now-timedelta(days=7))
+        elif order_by_field_name == "total_activity_last_month":
+            qs = qs.filter(activity__updated_datetime__gte=now-timedelta(days=30))
+        elif order_by_field_name == "total_activity_last_year":
+            qs = qs.filter(activity__updated_datetime__gte=now-timedelta(days=365))
 
         qs = self.attach_likes_attrs_to_queryset(qs)
-
-        order_by_field_name = self.get_order_by_field_name()
-        self.enable_optional_field(order_by_field_name)
-        qs = self.attach_optional_fields_to_queryset(qs)
-
         qs = attach_project_total_watchers_attrs_to_queryset(qs)
-        qs = attach_project_activity_to_queryset(qs)
         if self.request.user.is_authenticated():
             qs = attach_project_is_watcher_to_queryset(qs, self.request.user)
             qs = attach_notify_level_to_project_queryset(qs, self.request.user)
@@ -155,8 +119,6 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet,
 
         if self.action == "list":
             serializer_class = self.list_serializer_class
-            order_by_field_name = self.get_order_by_field_name()
-            serializer_class.enable_optional_field(order_by_field_name)
         elif self.action != "create":
             if self.action == "by_slug":
                 slug = self.request.QUERY_PARAMS.get("slug", None)

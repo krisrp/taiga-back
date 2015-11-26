@@ -25,6 +25,7 @@ from django.apps import apps
 from django.conf import settings
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.fields import GenericRelation
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
 
@@ -197,6 +198,8 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
 
     tags_colors = TextArrayField(dimension=2, default=[], null=False, blank=True,
                                  verbose_name=_("tags colors"))
+
+    likes = GenericRelation("likes.Likes")
     _importing = None
 
     class Meta:

@@ -87,7 +87,8 @@ class OrderByFilterMixin(QueryParamsFilterMixin):
 
     def filter_queryset(self, request, queryset, view):
         queryset = super().filter_queryset(request, queryset, view)
-        order_by_fields = getattr(view, "order_by_fields", None)
+        order_by_fields = getattr(view, "order_by_fields", ())
+        order_by_fields_aliases = getattr(view, "order_by_fields_aliases", {})
 
         raw_fieldname = request.QUERY_PARAMS.get(self.order_by_query_param, None)
         if not raw_fieldname or not order_by_fields:
@@ -98,8 +99,15 @@ class OrderByFilterMixin(QueryParamsFilterMixin):
         else:
             field_name = raw_fieldname
 
-        if field_name not in order_by_fields:
+        if field_name not in order_by_fields and not field_name in order_by_fields_aliases:
             return queryset
+
+        if field_name in order_by_fields_aliases:
+            alias_fieldname = order_by_fields_aliases[field_name]
+            if raw_fieldname.startswith("-"):
+                raw_fieldname = "-" + alias_fieldname
+            else:
+                raw_fieldname = alias_fieldname
 
         if raw_fieldname in ["owner", "-owner", "assigned_to", "-assigned_to"]:
             raw_fieldname = "{}__full_name".format(raw_fieldname)

@@ -213,37 +213,3 @@ class DestroyModelMixin:
         obj.delete()
         self.post_delete(obj)
         return response.NoContent()
-
-
-class OptionalFieldsModelMixin:
-    """
-    This mixin is designed to be included in viewsets needing to include
-    some optional attributes on the result querysets
-
-    optional_fields are not included by default in the result queryset
-
-    optional_fields internal structure will be similar to:
-    {
-        ...
-        "optional_field_name": {
-            "enabled": Boolean,
-            "callback": it must receive at least a queryset and return another one,
-            "args": *args for method_to_call,
-            "kwargs": **kwargs for method_to_call
-        },
-        ...
-    }
-    """
-    optional_fields = {}
-
-    def enable_optional_field(self, field_name):
-        field_data = self.optional_fields.get(field_name, None)
-        if field_data is not None:
-            field_data["enabled"] = True
-
-    def attach_optional_fields_to_queryset(self, queryset):
-        for field_name, field_data in self.optional_fields.items():
-            if field_data["enabled"]:
-                queryset = field_data["callback"](queryset, *field_data["args"], **field_data["kwargs"])
-
-        return queryset

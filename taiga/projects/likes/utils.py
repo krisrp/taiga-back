@@ -18,7 +18,7 @@
 from django.apps import apps
 
 
-def attach_total_fans_to_queryset(queryset, as_field="total_fans", last_days=None):
+def attach_fans_to_queryset(queryset):
     """Attach likes count to each object of the queryset.
 
     Because of laziness of like objects creation, this makes much simpler and more efficient to
@@ -36,21 +36,21 @@ def attach_total_fans_to_queryset(queryset, as_field="total_fans", last_days=Non
     """
     model = queryset.model
     type = apps.get_model("contenttypes", "ContentType").objects.get_for_model(model)
-    sql = """SELECT COUNT(*)
-                  FROM likes_like
-                 WHERE likes_like.content_type_id = {type_id}
-                   AND likes_like.object_id = {tbl}.id
-          """
-    sql = sql.format(type_id=type.id, tbl=model._meta.db_table)
+    queryset = queryset.extra(
+        select={
+            "total_fans": "COALESCE(likes_likes.count, 0)",
+            "total_fans_last_week": "COALESCE(likes_likes.count, 0)",
+            "total_fans_last_month": "COALESCE(likes_likes.count, 0)",
+            "total_fans_last_year": "COALESCE(likes_likes.count, 0)",
+        },
+        tables = ["likes_likes"],
+        where = [
+            "likes_likes.content_type_id = {type_id}".format(type_id=type.id),
+            "likes_likes.object_id = {tbl}.id".format(tbl=model._meta.db_table),
+        ]
+    )
 
-    if last_days:
-        sql += """
-                   AND likes_like.created_date > current_date - interval '{last_days}' day
-            """
-        sql = sql.format(last_days=last_days)
-
-    qs = queryset.extra(select={as_field: sql})
-    return qs
+    return queryset
 
 
 def attach_is_fan_to_queryset(user, queryset, as_field="is_fan"):
@@ -70,7 +70,7 @@ def attach_is_fan_to_queryset(user, queryset, as_field="is_fan"):
     """
     model = queryset.model
     type = apps.get_model("contenttypes", "ContentType").objects.get_for_model(model)
-    sql = ("""SELECT CASE WHEN (SELECT count(*)
+    sql = ("""SELECT CASE WHEN (SELECT count(id)
                                   FROM likes_like
                                  WHERE likes_like.content_type_id = {type_id}
                                    AND likes_like.object_id = {tbl}.id
