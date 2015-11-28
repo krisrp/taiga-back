@@ -16,7 +16,10 @@
 
 import uuid
 
-from django.db.models import signals
+from django.apps import apps
+from django.db.models import signals, Prefetch
+from django.db.models import Value as V
+from django.db.models.functions import Coalesce
 from django.core.exceptions import ValidationError
 from django.utils.translation import ugettext as _
 from django.utils import timezone
@@ -32,6 +35,7 @@ from taiga.base.api.utils import get_object_or_404
 from taiga.base.utils.slug import slugify_uniquely
 
 from taiga.projects.history.mixins import HistoryResourceMixin
+from taiga.projects.notifications.models import NotifyPolicy
 from taiga.projects.notifications.mixins import WatchedResourceMixin, WatchersViewSetMixin
 from taiga.projects.notifications.choices import NotifyLevel
 from taiga.projects.notifications.utils import (
@@ -66,6 +70,7 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet)
     list_serializer_class = serializers.ProjectSerializer
     permission_classes = (permissions.ProjectPermission, )
     filter_backends = (filters.CanViewProjectObjFilterBackend,)
+
     filter_fields = (('member', 'members'),
                      'is_looking_for_people',
                      'is_featured',
@@ -76,14 +81,11 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet)
                        "total_fans",
                        "total_fans_last_week",
                        "total_fans_last_month",
-                       "total_fans_last_year")
-
-    order_by_fields_aliases = {
-           "total_activity": "activity__count_week",
-           "total_activity_last_week": "activity__count_week",
-           "total_activity_last_month": "activity__count_month",
-           "total_activity_last_year": "activity__count_year"
-    }
+                       "total_fans_last_year",
+                       "total_activity",
+                       "total_activity_last_week",
+                       "total_activity_last_month",
+                       "total_activity_last_year")
 
     def get_order_by_field_name(self):
         order_by_query_param = filters.CanViewProjectObjFilterBackend.order_by_query_param
@@ -93,24 +95,45 @@ class ProjectViewSet(LikedResourceMixin, HistoryResourceMixin, ModelCrudViewSet)
 
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = qs.prefetch_related("likes")
-        qs = qs.select_related("activity")
+        #qs = qs.prefetch_related("likes")
+
+        # Prefetch doesn't work correctly if then we are filtering by them (it generates more queries)
+        # so we add some custom prefetching
+        qs = qs.prefetch_related("members")
+        qs = qs.prefetch_related(Prefetch("notify_policies",
+            NotifyPolicy.objects.exclude(notify_level=NotifyLevel.none), to_attr="valid_notify_policies"))
+
+        Milestone = apps.get_model("milestones", "Milestone")
+        qs = qs.prefetch_related(Prefetch("milestones",
+            Milestone.objects.filter(closed=True), to_attr="closed_milestones"))
+
+        # When ordering by total_fans ot total_activity we want to prevent showing the null values first
+        #qs = qs.annotate(likes__count=Coalesce("likes__count", V(0)))
+        #qs = qs.annotate(activity__count=Coalesce("activity__count", V(0)))
+
+        #qs = qs.select_related("activity")
 
         # If filtering an activity period we must exclude the activities not updated recently enough
         now = timezone.now()
         order_by_field_name = self.get_order_by_field_name()
-        if order_by_field_name == "total_activity_last_week":
+        if order_by_field_name == "total_fans_last_week":
+            qs = qs.filter(likes__updated_datetime__gte=now-timedelta(days=7))
+        elif order_by_field_name == "total_fans_last_month":
+            qs = qs.filter(likes__updated_datetime__gte=now-timedelta(days=30))
+        elif order_by_field_name == "total_fans_last_year":
+            qs = qs.filter(likes__updated_datetime__gte=now-timedelta(days=365))
+        elif order_by_field_name == "total_activity_last_week":
             qs = qs.filter(activity__updated_datetime__gte=now-timedelta(days=7))
         elif order_by_field_name == "total_activity_last_month":
             qs = qs.filter(activity__updated_datetime__gte=now-timedelta(days=30))
         elif order_by_field_name == "total_activity_last_year":
             qs = qs.filter(activity__updated_datetime__gte=now-timedelta(days=365))
 
-        qs = self.attach_likes_attrs_to_queryset(qs)
-        qs = attach_project_total_watchers_attrs_to_queryset(qs)
-        if self.request.user.is_authenticated():
-            qs = attach_project_is_watcher_to_queryset(qs, self.request.user)
-            qs = attach_notify_level_to_project_queryset(qs, self.request.user)
+        #qs = self.attach_likes_attrs_to_queryset(qs)
+        #qs = attach_project_total_watchers_attrs_to_queryset(qs)
+        #if self.request.user.is_authenticated():
+            #qs = attach_project_is_watcher_to_queryset(qs, self.request.user)
+            #qs = attach_notify_level_to_project_queryset(qs, self.request.user)
 
         return qs
 

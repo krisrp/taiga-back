@@ -17,7 +17,7 @@ def create_activity(apps, schema_editor):
         totals AS (SELECT
         	split_part(timeline_timeline.namespace, ':', 2)::integer as project_id,
         	count(timeline_timeline.namespace) total,
-        	MIN (created) updated_datetime
+        	MAX (created) updated_datetime
         	FROM timeline_timeline
         	WHERE namespace LIKE 'project:%'
         	GROUP BY namespace),

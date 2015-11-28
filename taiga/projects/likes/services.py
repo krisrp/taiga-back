@@ -39,8 +39,7 @@ def add_like(obj, user):
             return
 
         likes, _ = Likes.objects.get_or_create(content_type=obj_type, object_id=obj.id)
-        likes.count = F('count') + 1
-        likes.save()
+        likes.refresh()
     return like
 
 
@@ -62,8 +61,7 @@ def remove_like(obj, user):
         qs.delete()
 
         likes, _ = Likes.objects.get_or_create(content_type=obj_type, object_id=obj.id)
-        likes.count = F('count') - 1
-        likes.save()
+        likes.refresh()
 
 
 def get_fans(obj):

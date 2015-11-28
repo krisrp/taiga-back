@@ -273,27 +273,20 @@ class Activity(models.Model):
         tl_model = apps.get_model("timeline", "Timeline")
         namespace = build_project_namespace(self.project)
 
-        qs = tl_model.objects.filter(namespace=namespace)
-        count = qs.count()
-
         now = timezone.now()
-        qs_week = tl_model.objects.filter(namespace=namespace).filter(
-            created__gte=now-timedelta(days=7))
-        count_week = qs_week.count()
-
-        qs_month = tl_model.objects.filter(namespace=namespace).filter(
-            created__gte=now-timedelta(days=30))
-        count_month = qs_month.count()
-
-        qs_year = tl_model.objects.filter(namespace=namespace).filter(
-            created__gte=now-timedelta(days=365))
-        count_year = qs_year.count()
-
-        self.count = count
-        self.count_week = count_week
-        self.count_month = count_month
-        self.count_year = count_year
         self.updated_datetime = now
+
+        qs = tl_model.objects.filter(namespace=namespace)
+        self.count = qs.count()
+
+        qs_week = qs.filter(created__gte=now-timedelta(days=7))
+        self.count_week = qs_week.count()
+
+        qs_month = qs.filter(created__gte=now-timedelta(days=30))
+        self.count_month = qs_month.count()
+
+        qs_year = qs.filter(created__gte=now-timedelta(days=365))
+        self.count_year = qs_year.count()
 
         if save:
             self.save()

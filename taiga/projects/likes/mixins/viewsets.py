@@ -36,9 +36,10 @@ class LikedResourceMixin:
         qs = attach_fans_to_queryset(queryset)
 
         if self.request.user.is_authenticated():
-            qs = attach_is_fan_to_queryset(self.request.user, qs)
+            queryset = attach_is_fan_to_queryset(self.request.user, queryset)
 
-        return qs
+        return queryset
+
 
     @detail_route(methods=["POST"])
     def like(self, request, pk=None):

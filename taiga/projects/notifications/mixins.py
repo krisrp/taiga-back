@@ -30,7 +30,7 @@ from taiga.base.api.utils import get_object_or_404
 from taiga.base.fields import WatchersField
 from taiga.projects.notifications import services
 from taiga.projects.notifications.utils import (attach_watchers_to_queryset,
-    attach_is_watcher_to_queryset,
+    #attach_is_watcher_to_queryset,
     attach_total_watchers_to_queryset)
 
 from taiga.users.models import User
@@ -52,12 +52,12 @@ class WatchedResourceMixin:
     _not_notify = False
 
     def attach_watchers_attrs_to_queryset(self, queryset):
-        qs = attach_watchers_to_queryset(queryset)
-        qs = attach_total_watchers_to_queryset(queryset)
-        if self.request.user.is_authenticated():
-            qs = attach_is_watcher_to_queryset(qs, self.request.user)
+        #qs = attach_watchers_to_queryset(queryset)
+        #qs = attach_total_watchers_to_queryset(queryset)
+        #if self.request.user.is_authenticated():
+        #    qs = attach_is_watcher_to_queryset(qs, self.request.user)
 
-        return qs
+        return queryset
 
     @detail_route(methods=["POST"])
     def watch(self, request, pk=None):
@@ -186,8 +186,11 @@ class WatchedResourceModelSerializer(serializers.ModelSerializer):
     total_watchers = serializers.SerializerMethodField("get_total_watchers")
 
     def get_is_watcher(self, obj):
-        # The "is_watcher" attribute is attached in the get_queryset of the viewset.
-        return getattr(obj, "is_watcher", False) or False
+        if "request" in self.context:
+            user = self.context["request"].user
+            return user.is_watcher(obj)
+
+        return False
 
     def get_total_watchers(self, obj):
         # The "total_watchers" attribute is attached in the get_queryset of the viewset.

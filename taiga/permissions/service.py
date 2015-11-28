@@ -24,10 +24,8 @@ def _get_user_project_membership(user, project):
     if user.is_anonymous():
         return None
 
-    try:
-        return Membership.objects.get(user=user, project=project)
-    except Membership.DoesNotExist:
-        return None
+    return user.cached_memberships.get(project.id, None)
+
 
 def _get_object_project(obj):
     project = None

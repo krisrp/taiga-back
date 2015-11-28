@@ -16,26 +16,44 @@
 
 from taiga.base.api import serializers
 
+from django.utils import timezone
+
+
 class FanResourceSerializerMixin(serializers.ModelSerializer):
     is_fan = serializers.SerializerMethodField("get_is_fan")
-    total_fans = serializers.SerializerMethodField("get_total_fans")
+    #total_fans = serializers.SerializerMethodField("get_total_fans")
+    #total_fans_last_week = serializers.SerializerMethodField("get_total_fans_last_week")
+    #total_fans_last_month = serializers.SerializerMethodField("get_total_fans_last_month")
+    #total_fans_last_year = serializers.SerializerMethodField("get_total_fans_last_year")
 
     def get_is_fan(self, obj):
-        # The "is_fan" attribute is attached in the get_queryset of the viewset.
-        return getattr(obj, "is_fan", False) or False
+        if "request" in self.context:
+            user = self.context["request"].user
+            return user.is_fan(obj)
 
+        return False
+    """
     def get_total_fans(self, obj):
-        # The "total_fans" attribute is attached in the get_queryset of the viewset.
-        return getattr(obj, "total_fans", 0) or 0
+        return obj.likes.count
+
+    def _get_total_fans_last_days(self, obj, days, attribute):
+        now = timezone.now()
+
+        if obj.likes.count() == 0:
+            return 0
+
+        likes = obj.likes.get()
+        if (now - likes.updated_datetime).days > days:
+            return 0
+
+        return getattr(likes, attribute)
 
     def get_total_fans_last_week(self, obj):
-        # The "total_fans_last_week" attribute is attached in the get_queryset of the viewset.
-        return getattr(obj, "total_fans_last_week", 0) or 0
+        return self._get_total_fans_last_days(obj, 7, "count_week")
 
     def get_total_fans_last_month(self, obj):
-        # The "total_fanstotal_fans_last_month attribute is attached in the get_queryset of the viewset.
-        return getattr(obj, "total_fans_last_month", 0) or 0
+        return self._get_total_fans_last_days(obj, 30, "count_month")
 
     def get_total_fans_last_year(self, obj):
-        # The "total_fans_last_year" attribute is attached in the get_queryset of the viewset.
-        return getattr(obj, "total_fans_last_year", 0) or 0
+        return self._get_total_fans_last_days(obj, 365, "count_year")
+    """

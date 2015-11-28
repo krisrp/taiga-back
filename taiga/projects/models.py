@@ -200,6 +200,31 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
                                  verbose_name=_("tags colors"))
 
     likes = GenericRelation("likes.Likes")
+
+    #Totals:
+    totals_updated_datetime = models.DateTimeField(null=False, blank=False, auto_now_add=True,
+                                            verbose_name=_("updated date time"), db_index=True)
+
+    total_fans = models.PositiveIntegerField(null=False, blank=False, default=0, verbose_name=_("count"))
+    total_fans_last_week = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                             verbose_name=_("fans last week"), db_index=True)
+
+    total_fans_last_month = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                              verbose_name=_("fans last month"), db_index=True)
+
+    total_fans_last_year = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                             verbose_name=_("fans last year"), db_index=True)
+
+    total_activity = models.PositiveIntegerField(null=False, blank=False, default=0, verbose_name=_("count"))
+    total_activity_last_week = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                             verbose_name=_("activity last week"), db_index=True)
+
+    total_activity_last_month = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                              verbose_name=_("activity last month"), db_index=True)
+
+    total_activity_last_year = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                             verbose_name=_("activity last year"), db_index=True)
+
     _importing = None
 
     class Meta:
@@ -234,6 +259,40 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
             self.videoconferences_extra_data = None
 
         super().save(*args, **kwargs)
+
+    def refresh_totals(self, save=True):
+        now = timezone.now()
+        self.totals_updated_datetime = now
+
+        qs = Like.objects.filter(content_type=self.content_type, object_id=self.id)
+        self.total_fans = qs.count()
+
+        qs_week = qs.filter(created_date__gte=now-timedelta(days=7))
+        self.total_fans_last_week = qs_week.count()
+
+        qs_month = qs.filter(created_date__gte=now-timedelta(days=30))
+        self.total_fans_last_month = qs_month.count()
+
+        qs_year = qs.filter(created_date__gte=now-timedelta(days=365))
+        self.total_fans_last_year = qs_year.count()
+
+        tl_model = apps.get_model("timeline", "Timeline")
+        namespace = build_project_namespace(self)
+
+        qs = tl_model.objects.filter(namespace=namespace)
+        self.total_activity = qs.count()
+
+        qs_week = qs.filter(created__gte=now-timedelta(days=7))
+        self.total_activity_last_week = qs_week.count()
+
+        qs_month = qs.filter(created__gte=now-timedelta(days=30))
+        self.total_activity_last_month = qs_month.count()
+
+        qs_year = qs.filter(created__gte=now-timedelta(days=365))
+        self.total_activity_last_year = qs_year.count()
+
+        if save:
+            self.save()
 
     def get_roles(self):
         return self.roles.all()
@@ -281,10 +340,6 @@ class Project(ProjectDefaults, TaggedMixin, models.Model):
         rp_query = RolePoints.objects.filter(user_story__in=self.user_stories.all())
         rp_query = rp_query.exclude(role__id__in=roles.values_list("id", flat=True))
         rp_query.delete()
-
-    @property
-    def project(self):
-        return self
 
     @property
     def project(self):

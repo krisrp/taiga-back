@@ -18,14 +18,27 @@
 from django.conf import settings
 from django.contrib.contenttypes import generic
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 
+from datetime import timedelta
 
 class Likes(models.Model):
     content_type = models.ForeignKey("contenttypes.ContentType")
     object_id = models.PositiveIntegerField()
     content_object = generic.GenericForeignKey("content_type", "object_id")
     count = models.PositiveIntegerField(null=False, blank=False, default=0, verbose_name=_("count"))
+    count_week = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                             verbose_name=_("count last week"))
+
+    count_month = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                              verbose_name=_("count last month"))
+
+    count_year = models.PositiveIntegerField(null=False, blank=False, default=0,
+                                             verbose_name=_("count last year"))
+
+    updated_datetime = models.DateTimeField(null=False, blank=False, auto_now_add=True,
+                                            verbose_name=_("updated date time"))
 
     class Meta:
         verbose_name = _("Likes")
@@ -40,6 +53,25 @@ class Likes(models.Model):
 
     def __str__(self):
         return self.count
+
+    def refresh(self, save=True):
+        now = timezone.now()
+        self.updated_datetime = now
+
+        qs = Like.objects.filter(content_type=self.content_type, object_id=self.object_id)
+        self.count = qs.count()
+
+        qs_week = qs.filter(created_date__gte=now-timedelta(days=7))
+        self.count_week = qs_week.count()
+
+        qs_month = qs.filter(created_date__gte=now-timedelta(days=30))
+        self.count_month = qs_month.count()
+
+        qs_year = qs.filter(created_date__gte=now-timedelta(days=365))
+        self.count_year = qs_year.count()
+
+        if save:
+            self.save()
 
 
 class Like(models.Model):
